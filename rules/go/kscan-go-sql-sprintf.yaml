@@ -1,0 +1,32 @@
+rules:
+  - id: kscan-go-sql-sprintf
+    languages: [go]
+    severity: ERROR
+    message: >-
+      SQL built with fmt.Sprintf and passed to a query method. Any request value in
+      the format arguments is SQL injection. Use placeholders (`?` / `$1`) with
+      arguments; for identifiers (ORDER BY column, table name) map user input to
+      an allowlist of known names.
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: "A03:2021 - Injection"
+      source: kscan
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$M(fmt.Sprintf($Q, ...), ...)
+          - pattern: $DB.$M($CTX, fmt.Sprintf($Q, ...), ...)
+          - pattern: |
+              $S := fmt.Sprintf($Q, ...)
+              ...
+              $DB.$M(..., $S, ...)
+          - pattern: |
+              $S = fmt.Sprintf($Q, ...)
+              ...
+              $DB.$M(..., $S, ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(Raw|Exec|Query|QueryRow|QueryContext|ExecContext|QueryRowContext|Select|Get|Where|Order|Prepare|PrepareContext)$
+      - metavariable-regex:
+          metavariable: $Q
+          regex: (?is).*\b(select|insert|update|delete|where|from|order\s+by|values)\b

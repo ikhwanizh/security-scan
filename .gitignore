@@ -1,0 +1,5 @@
+bin/
+# Scan reports can contain source snippets from scanned repos. Never commit them.
+kscan-report/
+*.sarif
+coverage.out

@@ -1,0 +1,124 @@
+{
+	"Golang errors": {},
+	"Issues": [
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "89",
+				"url": "https://cwe.mitre.org/data/definitions/89.html"
+			},
+			"rule_id": "G701",
+			"details": "SQL injection via taint analysis: (*database/sql.DB).Query",
+			"file": "/repo/gosvc/main.go",
+			"code": "14: \t\tid := r.URL.Query().Get(\"id\")\n15: \t\trows, err := db.Query(fmt.Sprintf(\"SELECT * FROM users WHERE id = '%s'\", id))\n16: \t\tif err == nil {\n",
+			"line": "15",
+			"column": "24",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "79",
+				"url": "https://cwe.mitre.org/data/definitions/79.html"
+			},
+			"rule_id": "G705",
+			"details": "XSS via taint analysis: fmt.Fprintf",
+			"file": "/repo/gosvc/main.go",
+			"code": "19: \t\ttag, _ := language.Parse(r.Header.Get(\"Accept-Language\"))\n20: \t\tfmt.Fprintf(w, \"%x %s\", md5.Sum([]byte(id)), tag)\n21: \t}\n",
+			"line": "20",
+			"column": "14",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "328",
+				"url": "https://cwe.mitre.org/data/definitions/328.html"
+			},
+			"rule_id": "G401",
+			"details": "Use of weak cryptographic primitive",
+			"file": "/repo/gosvc/main.go",
+			"code": "19: \t\ttag, _ := language.Parse(r.Header.Get(\"Accept-Language\"))\n20: \t\tfmt.Fprintf(w, \"%x %s\", md5.Sum([]byte(id)), tag)\n21: \t}\n",
+			"line": "20",
+			"column": "27",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "676",
+				"url": "https://cwe.mitre.org/data/definitions/676.html"
+			},
+			"rule_id": "G114",
+			"details": "Use of net/http serve function that has no support for setting timeouts",
+			"file": "/repo/gosvc/main.go",
+			"code": "25: \tdb, _ := sql.Open(\"postgres\", \"\")\n26: \thttp.ListenAndServe(\":8080\", handler(db))\n27: }\n",
+			"line": "26",
+			"column": "2",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "327",
+				"url": "https://cwe.mitre.org/data/definitions/327.html"
+			},
+			"rule_id": "G501",
+			"details": "Blocklisted import crypto/md5: weak cryptographic primitive",
+			"file": "/repo/gosvc/main.go",
+			"code": "3: import (\n4: \t\"crypto/md5\"\n5: \t\"database/sql\"\n",
+			"line": "4",
+			"column": "2",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "LOW",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "703",
+				"url": "https://cwe.mitre.org/data/definitions/703.html"
+			},
+			"rule_id": "G104",
+			"details": "Errors unhandled",
+			"file": "/repo/gosvc/main.go",
+			"code": "25: \tdb, _ := sql.Open(\"postgres\", \"\")\n26: \thttp.ListenAndServe(\":8080\", handler(db))\n27: }\n",
+			"line": "26",
+			"column": "2",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "LOW",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "703",
+				"url": "https://cwe.mitre.org/data/definitions/703.html"
+			},
+			"rule_id": "G104",
+			"details": "Errors unhandled",
+			"file": "/repo/gosvc/main.go",
+			"code": "16: \t\tif err == nil {\n17: \t\t\trows.Close()\n18: \t\t}\n",
+			"line": "17",
+			"column": "4",
+			"nosec": false,
+			"suppressions": null
+		}
+	],
+	"Stats": {
+		"files": 1,
+		"lines": 27,
+		"nosec": 0,
+		"found": 7
+	},
+	"GosecVersion": "2.30.0"
+}

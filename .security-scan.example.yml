@@ -1,0 +1,37 @@
+# Copy to <repo>/.security-scan.yml (or pass --config).
+
+# Which scanners run. Use either enable (exact list; a listed scanner that is
+# not installed fails the scan with exit 2) or disable, not both.
+# Names: gitleaks, semgrep, trivy, osv-scanner, gosec, bandit, govulncheck.
+scanners:
+  disable: []
+
+# Fail (exit 1) when a NEW finding is at or above this severity.
+# info, low, medium, high, critical, or none. The --fail-on flag overrides it.
+fail_on: high
+
+# Drop every finding under these paths (doublestar globs, relative to repo root).
+# vendor/, node_modules/, venv/ and similar are always skipped.
+ignore_paths:
+  - "evals/**"
+  - "**/migrations/**"
+
+# Secrets found here are kept but demoted to info, since they are usually
+# example values. Setting this replaces the defaults:
+#   **/*.md, docs/**, **/docs/**, tests/**, **/tests/**, **/test_*.py,
+#   **/*_test.go, **/*example*, **/*.template
+# secret_demote_paths:
+#   - "docs/**"
+
+# Suppress findings. A reason is required.
+#   fingerprint: one exact finding (shown in the HTML/JSON reports and SARIF)
+#   rule and/or path: every finding of a rule ID or CVE, optionally under a glob
+suppress:
+  - fingerprint: 0123456789abcdef
+    reason: MD5 used as a cache key, not for security
+  - rule: kscan-ssrf-unvalidated-host
+    path: "app/admin/**"
+    reason: admin-only endpoint, hosts come from a fixed allowlist
+
+# Hide findings below this severity: info, low, medium, high, critical.
+min_severity: info

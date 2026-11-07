@@ -1,0 +1,30 @@
+rules:
+  - id: kscan-unsafe-deserialization
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Deserializing with pickle-based loaders runs arbitrary code embedded in the
+      file. Anyone who can write the file (an upload, a shared volume, a downloaded
+      model) gets remote code execution. Make sure the path can never be reached
+      by user input, prefer safe formats (JSON, safetensors), and for torch use
+      `torch.load(..., weights_only=True)`.
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      source: kscan
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+      - pattern: cPickle.load(...)
+      - pattern: cPickle.loads(...)
+      - pattern: dill.load(...)
+      - pattern: dill.loads(...)
+      - pattern: cloudpickle.load(...)
+      - pattern: cloudpickle.loads(...)
+      - pattern: joblib.load(...)
+      - pattern: pandas.read_pickle(...)
+      - pattern: pd.read_pickle(...)
+      - patterns:
+          - pattern: torch.load(...)
+          - pattern-not: torch.load(..., weights_only=True, ...)

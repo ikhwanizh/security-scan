@@ -1,0 +1,87 @@
+{
+ "Results": [
+  {
+   "Target": "gosvc/go.mod",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2021-38561",
+     "PkgName": "golang.org/x/text",
+     "InstalledVersion": "v0.3.5",
+     "FixedVersion": "0.3.7",
+     "Severity": "HIGH",
+     "Title": "golang: out-of-bounds read in golang.org/x/text/language leads to DoS"
+    },
+    {
+     "VulnerabilityID": "CVE-2022-32149",
+     "PkgName": "golang.org/x/text",
+     "InstalledVersion": "v0.3.5",
+     "FixedVersion": "0.3.8",
+     "Severity": "HIGH",
+     "Title": "golang: golang.org/x/text/language: ParseAcceptLanguage takes a long time to parse complex tags"
+    },
+    {
+     "VulnerabilityID": "CVE-2026-56851",
+     "PkgName": "golang.org/x/text",
+     "InstalledVersion": "v0.3.5",
+     "FixedVersion": "0.41.0",
+     "Severity": "HIGH",
+     "Title": "golang.org/x/text: golang.org/x/text: Denial of Service via out-of-bounds slice error in Nickname profile"
+    }
+   ]
+  },
+  {
+   "Target": "requirements.txt",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2026-102268",
+     "PkgName": "PyJWT",
+     "InstalledVersion": "2.10.1",
+     "FixedVersion": "2.14.0",
+     "Severity": "CRITICAL",
+     "Title": "pyjwt: PyJWT: Authentication bypass via improper public key validation"
+    },
+    {
+     "VulnerabilityID": "CVE-2026-102267",
+     "PkgName": "PyJWT",
+     "InstalledVersion": "2.10.1",
+     "FixedVersion": "2.14.0",
+     "Severity": "HIGH",
+     "Title": "pyjwt: pyjwt: Verification key substitution via unvalidated JWKS redirects"
+    },
+    {
+     "VulnerabilityID": "CVE-2026-102271",
+     "PkgName": "PyJWT",
+     "InstalledVersion": "2.10.1",
+     "FixedVersion": "2.14.0",
+     "Severity": "HIGH",
+     "Title": "pyjwt: PyJWT: Authentication bypass via acceptance of DER public keys as HMAC secrets"
+    }
+   ]
+  },
+  {
+   "Target": "Dockerfile",
+   "Misconfigurations": [
+    {
+     "ID": "DS-0002",
+     "Title": "Image user should not be 'root'",
+     "Message": "Specify at least 1 USER command in Dockerfile with non-root user as argument",
+     "Severity": "HIGH",
+     "CauseMetadata": {
+      "Provider": "Dockerfile",
+      "Service": "general"
+     }
+    },
+    {
+     "ID": "DS-0026",
+     "Title": "No HEALTHCHECK defined",
+     "Message": "Add HEALTHCHECK instruction in your Dockerfile",
+     "Severity": "LOW",
+     "CauseMetadata": {
+      "Provider": "Dockerfile",
+      "Service": "general"
+     }
+    }
+   ]
+  }
+ ]
+}

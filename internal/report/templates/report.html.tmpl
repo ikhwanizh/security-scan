@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kscan report</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e3e2dd;
+  --critical: #8b1fa8; --high: #c62828; --medium: #b26a00; --low: #1f5fbf; --info: #6b6b66;
+  --code-bg: #f0efea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9c9b95; --line: #33332f;
+    --critical: #d48cf0; --high: #ff7a73; --medium: #f0b250; --low: #7fb0ff; --info: #9c9b95;
+    --code-bg: #2a2a27;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 32px 0 12px; }
+.meta { color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card .n { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card .l { color: var(--muted); text-transform: capitalize; }
+.sev-critical { color: var(--critical); } .sev-high { color: var(--high); } .sev-medium { color: var(--medium); }
+.sev-low { color: var(--low); } .sev-info { color: var(--info); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.filters label { display: inline-flex; gap: 4px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.filters input[type=search] { flex: 1 1 220px; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.sev { font-weight: 600; text-transform: uppercase; font-size: 12px; white-space: nowrap; }
+.loc, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.loc { word-break: break-all; }
+code.snip { display: block; margin-top: 6px; background: var(--code-bg); padding: 4px 8px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+.rule { color: var(--muted); font-size: 12px; }
+.fp { color: var(--muted); font-size: 11px; }
+.status-error { color: var(--high); } .status-skipped { color: var(--muted); }
+.empty { padding: 24px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>kscan report</h1>
+  <div class="meta">{{.Repo}} · {{.Languages}} · {{.StartedAt.Format "2006-01-02 15:04"}} · {{.Duration}} · kscan {{.Version}}</div>
+
+  <div class="cards">
+    {{range .BySeverity}}<div class="card"><div class="n sev-{{.Severity}}">{{.Count}}</div><div class="l">{{.Severity}}</div></div>{{end}}
+  </div>
+  <p class="meta">{{.Stats.Total}} raw findings → {{len .Findings}} shown: {{.Stats.Duplicates}} duplicates merged, {{.Stats.Ignored}} in ignored paths, {{.Stats.Suppressed}} suppressed, {{.Stats.BelowMin}} below min severity. {{.Stats.Demoted}} secrets in docs/tests demoted to info.</p>
+
+  <h2>Findings</h2>
+  <div class="filters" id="filters">
+    {{range .BySeverity}}<label><input type="checkbox" data-sev="{{.Severity}}" checked> {{.Severity}}</label>{{end}}
+    <input type="search" id="q" placeholder="Filter by file, rule, package, tool…">
+  </div>
+  <div class="table-wrap">
+  {{if .Findings}}
+  <table id="findings">
+    <thead><tr><th>Severity</th><th>Category</th><th>Location</th><th>Finding</th><th>Tool</th></tr></thead>
+    <tbody>
+    {{range .Findings}}
+      <tr data-sev="{{.Severity}}">
+        <td class="sev sev-{{.Severity}}">{{.Severity}}</td>
+        <td>{{.Category}}</td>
+        <td class="loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</td>
+        <td>
+          {{if eq (print .Category) "dependency"}}
+            <strong>{{.Package}}</strong> {{.InstalledVersion}} → {{if .FixedVersion}}{{.FixedVersion}}{{else}}no fix yet{{end}}
+            <div class="rule">{{.CVE}}</div>
+            <div>{{.Message}}</div>
+          {{else}}
+            <div>{{.Message}}</div>
+            <div class="rule">{{.RuleID}}</div>
+            {{if .Snippet}}<code class="snip">{{.Snippet}}</code>{{end}}
+          {{end}}
+          <div class="fp">fingerprint {{.Fingerprint}}</div>
+        </td>
+        <td>{{.Tool}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}<div class="empty">No findings.</div>{{end}}
+  </div>
+
+  <h2>Scanners</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Scanner</th><th>Status</th><th>Duration</th><th>Raw findings</th><th>Note</th></tr></thead>
+    <tbody>
+    {{range .Scanners}}
+      <tr><td>{{.Scanner}}</td><td class="status-{{.Status}}">{{.Status}}</td><td>{{if .Duration}}{{.Duration}}{{end}}</td><td>{{len .Findings}}</td><td>{{.Reason}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</main>
+<script>
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#findings tbody tr"));
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("#filters input[type=checkbox]"));
+  var q = document.getElementById("q");
+  function apply() {
+    var on = {};
+    boxes.forEach(function (b) { on[b.dataset.sev] = b.checked; });
+    var term = q.value.trim().toLowerCase();
+    rows.forEach(function (r) {
+      var show = on[r.dataset.sev] && (!term || r.textContent.toLowerCase().indexOf(term) !== -1);
+      r.style.display = show ? "" : "none";
+    });
+  }
+  boxes.forEach(function (b) { b.addEventListener("change", apply); });
+  q.addEventListener("input", apply);
+})();
+</script>
+</body>
+</html>

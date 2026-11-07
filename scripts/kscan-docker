@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs kscan from the Docker image with the current directory mounted at the
+# same path, so relative and absolute paths under it keep working.
+# Used by `make image-test`; KSCAN_IMAGE picks the image.
+set -eu
+image="${KSCAN_IMAGE:-kscan:dev}"
+exec docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD:$PWD" -w "$PWD" \
+  -v kscan-trivy-cache:/cache/trivy \
+  "$image" "$@"

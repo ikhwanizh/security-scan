@@ -1,0 +1,26 @@
+# kscan scanning its own repository (see .github/workflows/security-scan.yml).
+ignore_paths:
+  # Deliberately vulnerable samples: fixtures and semgrep rule tests.
+  - "test-fixtures/**"
+  - "rules/**"
+  - "internal/scanner/testdata/**"
+fail_on: high
+suppress:
+  # semgrep pins mcp==1.29.0 and opentelemetry-api~=1.37.0 exactly (checked
+  # up to semgrep 1.184.0). kscan never starts semgrep's MCP server and runs
+  # with metrics and tracing off. Remove these once semgrep bumps its pins.
+  - rule: CVE-2026-59951
+    path: docker/requirements.txt
+    reason: mcp pinned by semgrep; MCP server not used by kscan
+  - rule: CVE-2026-116684
+    path: docker/requirements.txt
+    reason: mcp pinned by semgrep; MCP server not used by kscan
+  - rule: CVE-2026-116685
+    path: docker/requirements.txt
+    reason: mcp pinned by semgrep; MCP server not used by kscan
+  - rule: CVE-2026-116686
+    path: docker/requirements.txt
+    reason: mcp pinned by semgrep; MCP server not used by kscan
+  - rule: CVE-2026-114603
+    path: docker/requirements.txt
+    reason: opentelemetry-api pinned by semgrep; tracing is off in kscan runs

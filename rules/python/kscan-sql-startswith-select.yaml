@@ -1,0 +1,23 @@
+rules:
+  - id: kscan-sql-startswith-select
+    languages: [python]
+    severity: WARNING
+    message: >-
+      SQL is "validated" as read-only with startswith('SELECT'). This is easy to
+      bypass: `SELECT ... INTO OUTFILE` (MySQL), `SELECT pg_read_file(...)` /
+      `dblink(...)` (Postgres), or `SELECT 1; DROP TABLE x` when the driver allows
+      multiple statements. Use a read-only DB user or `SET TRANSACTION READ ONLY`,
+      and parse the query (e.g. sqlglot) to allow exactly one SELECT statement.
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: "A03:2021 - Injection"
+      source: kscan
+    patterns:
+      - pattern-either:
+          - pattern: $Q.$UP().startswith("$SEL")
+          - pattern: $Q.$S().$UP().startswith("$SEL")
+          - pattern: $Q.startswith("$SEL")
+      - metavariable-regex:
+          metavariable: $SEL
+          regex: (?i)^\s*\(?\s*select

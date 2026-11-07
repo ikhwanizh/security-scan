@@ -1,0 +1,26 @@
+rules:
+  - id: kscan-fstring-sql
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL built with string formatting. If any part comes from a request (table
+      name, filter, column), this is SQL injection. Use bound parameters for values;
+      for identifiers (table/column names) check them against an allowlist from the
+      schema, or quote them with the driver's identifier-quoting helper.
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: "A03:2021 - Injection"
+      source: kscan
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: '"$SQL".format(...)'
+              - pattern: '"$SQL" % ...'
+              - pattern: '"$SQL" + $X'
+          - metavariable-regex:
+              metavariable: $SQL
+              regex: (?is)^\s*(select\s.+\sfrom\s|insert\s+into\s|update\s+\S+\s+set\s|delete\s+from\s|describe\s|show\s+(columns|tables)|drop\s+table\s)|.*\swhere\s
+      # f-strings do not bind as a metavariable, so match their source text:
+      # an f-string that starts like SQL and has a {placeholder}.
+      - pattern-regex: (?is)\bf("""|"|')\s*(select\b(?=[^"]{0,400}\bfrom\b)|insert\s+into|update\s+\w+\s+set|delete\s+from|describe|show\s+(columns|tables)|drop\s+table)[^"]{0,400}?\{

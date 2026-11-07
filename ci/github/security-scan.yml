@@ -1,0 +1,119 @@
+# kscan security scan for GitHub Actions.
+#
+# Copy to .github/workflows/security-scan.yml in the repo to scan. It pulls a
+# pinned kscan image (never builds it), scans, uploads SARIF and fails the job
+# on NEW findings at or above fail_on (.security-scan.yml, default high).
+#
+#   push to main   full scan
+#   pull request   only changed files (semgrep, bandit) and the PR's commits
+#                  (gitleaks); dependency scanners always scan everything
+#
+# Exit codes: 0 pass, 1 new findings at/above the threshold, 2 scanner error.
+#
+# Legacy issues: run `kscan scan . --write-baseline .security-baseline.json`
+# once (locally or via the image) and commit the file. Without it every
+# finding counts as new.
+#
+# SARIF upload needs code scanning: free on public repos, GitHub Advanced
+# Security on private ones. Without it the upload step is skipped with a
+# warning and the job summary plus the report artifact remain.
+#
+# Actions are pinned to commit SHAs; the comment shows the version.
+
+name: security-scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read         # pull the kscan image from GHCR
+  security-events: write # upload SARIF to code scanning
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KSCAN_IMAGE: ghcr.io/ikhwanizh/kscan:1.0.0
+  # Set to "false" to run full scans on pull requests too.
+  KSCAN_PR_DIFF: "true"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # diff mode needs the base branch and the PR's commits
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Day stamp for the trivy DB cache
+        id: day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache trivy vulnerability DB
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+
+      - name: Scan
+        id: scan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache" kscan-report
+          args=(scan /src --out /src/kscan-report --format terminal,sarif,json,markdown
+                --baseline /src/.security-baseline.json)
+          if [ "$EVENT" = "pull_request" ] && [ "$KSCAN_PR_DIFF" = "true" ]; then
+            args+=(--changed-since "origin/$BASE_REF")
+          fi
+          set +e
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -v "$RUNNER_TEMP/trivy-cache:/cache/trivy" \
+            "$KSCAN_IMAGE" "${args[@]}"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "kscan exit code: $code"
+
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('kscan-report/kscan.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: kscan-report/kscan.sarif
+          category: kscan
+
+      - name: Job summary
+        if: always() && hashFiles('kscan-report/kscan.md') != ''
+        run: cat kscan-report/kscan.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Reports contain snippets of this repo's code; keep retention short.
+      - name: Upload report
+        if: always() && hashFiles('kscan-report/kscan.json') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kscan-report
+          path: kscan-report/
+          retention-days: 7
+
+      - name: Fail on new findings or scanner errors
+        if: always()
+        env:
+          CODE: ${{ steps.scan.outputs.code }}
+        run: exit "${CODE:-2}"

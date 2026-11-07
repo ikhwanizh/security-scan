@@ -1,0 +1,7 @@
+.git
+.github
+bin
+kscan-report
+test-fixtures
+integration
+**/*.sarif
