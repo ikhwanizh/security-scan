@@ -21,7 +21,9 @@
 # Optional DefectDojo upload: add repo or org secrets DD_URL (for example
 # https://defectdojo.example.com, reachable from the runner) and DD_API_KEY.
 # Only full scans of the default branch are uploaded, with reimport-scan and
-# close_old_findings. The DefectDojo server needs
+# close_old_findings. Every scan (pull requests too) also reads triage from
+# DefectDojo: findings marked false positive, risk accepted or out of scope
+# there no longer fail the job. The DefectDojo server needs
 #   DD_DEDUPLICATION_ALGORITHM_PER_PARSER={"kscan Scan (Generic Findings Import)": "unique_id_from_tool"}
 # so findings are tracked by kscan fingerprint (see kscan README).
 #
@@ -87,6 +89,8 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           REF: ${{ github.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_PRODUCT: ${{ github.event.repository.name }}
         run: |
           mkdir -p "$RUNNER_TEMP/trivy-cache" kscan-report
           formats=terminal,sarif,json,markdown
@@ -101,8 +105,12 @@ jobs:
           if [ "$EVENT" = "pull_request" ] && [ "$KSCAN_PR_DIFF" = "true" ]; then
             args+=(--changed-since "origin/$BASE_REF")
           fi
+          if [ -n "$DD_URL" ]; then
+            args+=(--defectdojo-product "$DD_PRODUCT")
+          fi
           set +e
           docker run --rm --user "$(id -u):$(id -g)" \
+            -e DD_URL -e DD_API_KEY \
             -v "$GITHUB_WORKSPACE:/src" \
             -v "$RUNNER_TEMP/trivy-cache:/cache/trivy" \
             "$KSCAN_IMAGE" "${args[@]}"

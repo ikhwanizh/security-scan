@@ -219,3 +219,17 @@ func TestDefectDojoAcceptedFields(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalTriage(t *testing.T) {
+	d := sample()
+	d.DefectDojo = "my-repo"
+	d.Findings[0].Triage = "risk_accepted"
+	var buf bytes.Buffer
+	Terminal(&buf, d, 10)
+	out := buf.String()
+	for _, want := range []string{`Triaged   1 in DefectDojo product "my-repo"`, "accepted"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("terminal missing %q:\n%s", want, out)
+		}
+	}
+}

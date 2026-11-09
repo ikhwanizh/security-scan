@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"kscan/internal/defectdojo"
 	"kscan/internal/finding"
 	"kscan/internal/scanner"
 )
@@ -38,6 +39,13 @@ func (p palette) severity(s finding.Severity) string {
 	return p.dim
 }
 
+// triageLabels replaces the severity label of findings triaged in DefectDojo.
+var triageLabels = map[string]string{
+	defectdojo.FalsePositive: "false-p",
+	defectdojo.RiskAccepted:  "accepted",
+	defectdojo.OutOfScope:    "no-scope",
+}
+
 func truncate(s string, n int) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if len([]rune(s)) <= n {
@@ -66,6 +74,9 @@ func Terminal(w io.Writer, d Data, top int) {
 	if d.Baseline != "" {
 		fmt.Fprintf(w, "  Baseline  %d new / %d existing (%s)\n", d.NewCount(), len(d.Findings)-d.NewCount(), d.Baseline)
 	}
+	if d.DefectDojo != "" {
+		fmt.Fprintf(w, "  Triaged   %d in DefectDojo product %q (false positive, risk accepted, out of scope)\n", d.TriagedCount(), d.DefectDojo)
+	}
 	var tools []string
 	for _, tc := range d.ByTool() {
 		tools = append(tools, fmt.Sprintf("%s %d", tc.Tool, tc.Count))
@@ -86,7 +97,9 @@ func Terminal(w io.Writer, d Data, top int) {
 		fmt.Fprintf(w, "%sTop findings%s (%d of %d)\n", c.bold, c.reset, n, len(ordered))
 		for _, f := range ordered[:n] {
 			label := fmt.Sprintf("%-8s", strings.ToUpper(f.Severity.String()))
-			if d.Baseline != "" && !f.New {
+			if t, ok := triageLabels[f.Triage]; ok {
+				label = fmt.Sprintf("%-8s", t)
+			} else if d.Baseline != "" && !f.New {
 				label = fmt.Sprintf("%-8s", "existing")
 			}
 			var what string

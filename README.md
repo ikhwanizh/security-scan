@@ -158,6 +158,21 @@ What reimport does with the fingerprint (verified against DefectDojo 3.4.202 on 
 
 The export holds the same data as `kscan.json`, so it includes source snippets of non-secret findings, but never secret values.
 
+### Triage in DefectDojo, gate in kscan
+
+With `--defectdojo-product <name>` and the `DD_URL` and `DD_API_KEY` environment variables, kscan reads that product's findings marked **false positive**, **risk accepted** or **out of scope** and treats them like baseline findings: they stay in every report (labelled `false-p`, `accepted`, `no-scope`) but no longer fail the scan. Use it on pull requests too; it only reads.
+
+```bash
+DD_URL=https://defectdojo.example.com DD_API_KEY=... \
+  kscan scan . --baseline .security-baseline.json --defectdojo-product my-repo
+```
+
+- Triage is matched by kscan fingerprint, so it needs the dedupe setting above.
+- When a risk acceptance expires, DefectDojo clears its flag and the finding fails the scan again.
+- Reimports keep triage: DefectDojo does not reactivate findings marked false positive, risk accepted or out of scope.
+- If DefectDojo cannot be reached, kscan prints a warning and goes on without triage. The gate is then stricter, never weaker. `--defectdojo-product` without `DD_URL` or `DD_API_KEY` is a usage error (exit 2).
+- The API key's user needs read access to the product. In CI, anyone who can push a branch can read repo secrets, so give that DefectDojo user access only to the products it needs.
+
 ## CI setup (GitHub Actions)
 
 1. Copy [`ci/github/security-scan.yml`](ci/github/security-scan.yml) to `.github/workflows/security-scan.yml`.
@@ -170,7 +185,7 @@ What it does:
 - Pulls the pinned image; it never builds it.
 - Caches the trivy vulnerability DB per day.
 - Uploads SARIF to code scanning, writes the markdown summary to the job page, and keeps the reports as an artifact for 7 days.
-- **Optional DefectDojo upload**: when the secrets `DD_URL` and `DD_API_KEY` exist, full scans of the default branch are reimported into DefectDojo (product = repo name, product type = `DD_PRODUCT_TYPE` or the repo owner, engagement `CI/CD <branch>`, with commit, branch and run ID on the test). It is skipped for pull requests, other branches and scans where a scanner failed (exit 2), since `close_old_findings` would wrongly close findings. An upload failure shows on the step but does not change the gate. The API key's user needs permission to create products when they don't exist yet, and the DefectDojo server must be reachable from the runner.
+- **Optional DefectDojo upload**: when the secrets `DD_URL` and `DD_API_KEY` exist, full scans of the default branch are reimported into DefectDojo (product = repo name, product type = `DD_PRODUCT_TYPE` or the repo owner, engagement `CI/CD <branch>`, with commit, branch and run ID on the test). It is skipped for pull requests, other branches and scans where a scanner failed (exit 2), since `close_old_findings` would wrongly close findings. Every scan, pull requests included, also passes `--defectdojo-product <repo name>`, so findings triaged in DefectDojo stop failing the job. An upload failure shows on the step but does not change the gate. The API key's user needs permission to create products when they don't exist yet, and the DefectDojo server must be reachable from the runner.
 - Fails the job with kscan's exit code.
 
 Notes:

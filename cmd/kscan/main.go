@@ -19,6 +19,7 @@ import (
 
 	"kscan/internal/baseline"
 	"kscan/internal/config"
+	"kscan/internal/defectdojo"
 	"kscan/internal/detect"
 	"kscan/internal/filter"
 	"kscan/internal/finding"
@@ -69,6 +70,7 @@ type scanFlags struct {
 	baseline   string
 	writeBase  string
 	changed    string
+	ddProduct  string
 }
 
 func scanCmd() *cobra.Command {
@@ -99,6 +101,7 @@ func scanCmd() *cobra.Command {
 	f.StringVar(&fl.baseline, "baseline", "", "baseline file; only findings not in it are new and can fail the scan (missing file = everything is new)")
 	f.StringVar(&fl.changed, "changed-since", "", "diff mode for pull requests: scan only files changed since this git ref (semgrep, bandit) and only its new commits (gitleaks); dependency scanners still scan everything")
 	f.StringVar(&fl.writeBase, "write-baseline", "", "save the current findings as the baseline to this file (e.g. "+baseline.DefaultFile+")")
+	f.StringVar(&fl.ddProduct, "defectdojo-product", "", "skip findings triaged in this DefectDojo product (false positive, risk accepted, out of scope); needs DD_URL and DD_API_KEY")
 	return cmd
 }
 
@@ -142,6 +145,9 @@ func runScan(ctx context.Context, repo string, fl scanFlags) error {
 		if !slices.Contains([]string{"terminal", "sarif", "json", "html", "markdown", "defectdojo"}, f) {
 			return fmt.Errorf("unknown format %q", f)
 		}
+	}
+	if fl.ddProduct != "" && (os.Getenv("DD_URL") == "" || os.Getenv("DD_API_KEY") == "") {
+		return fmt.Errorf("--defectdojo-product needs the DD_URL and DD_API_KEY environment variables")
 	}
 	cfgPath := fl.configPath
 	if cfgPath == "" {
@@ -197,11 +203,12 @@ func runScan(ctx context.Context, repo string, fl scanFlags) error {
 	if err != nil {
 		return err
 	}
+	ddProduct := applyTriage(ctx, kept, fl.ddProduct)
 	threshold, enabled := cfg.Threshold()
 	data := report.Data{
 		Version: version, Repo: repo, Stack: stack, StartedAt: start,
 		Duration: time.Since(start).Round(time.Millisecond), Scanners: results, Findings: kept, Stats: stats,
-		Commit: gitdiff.Head(ctx, repo), Baseline: baselinePath,
+		Commit: gitdiff.Head(ctx, repo), Baseline: baselinePath, DefectDojo: ddProduct,
 	}
 	if fl.writeBase != "" {
 		if err := writeBaseline(fl.writeBase, &data); err != nil {
@@ -247,6 +254,23 @@ func applyBaseline(findings []finding.Finding, path string) (used string, err er
 	}
 	baseline.Mark(findings, known)
 	return path, nil
+}
+
+// applyTriage marks findings triaged in DefectDojo as not new. When
+// DefectDojo cannot be reached the scan goes on without it: the gate is then
+// stricter, never weaker, and an outage does not block every pull request.
+func applyTriage(ctx context.Context, findings []finding.Finding, product string) (used string) {
+	if product == "" {
+		return ""
+	}
+	triaged, err := defectdojo.New(os.Getenv("DD_URL"), os.Getenv("DD_API_KEY")).Triaged(ctx, product)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "kscan: warning: DefectDojo triage not applied: %v\n", err)
+		return ""
+	}
+	n := defectdojo.Apply(findings, triaged)
+	fmt.Fprintf(os.Stderr, "kscan: DefectDojo: %d triaged finding(s) in %q, %d match this scan\n", len(triaged), product, n)
+	return product
 }
 
 // writeBaseline accepts every current finding. It refuses when a scanner

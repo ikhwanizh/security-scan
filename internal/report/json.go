@@ -28,6 +28,7 @@ type jsonSummary struct {
 	Repo       string            `json:"repo"`
 	Commit     string            `json:"commit,omitempty"`
 	Baseline   string            `json:"baseline,omitempty"`
+	DefectDojo string            `json:"defectdojo_product,omitempty"`
 	StartedAt  time.Time         `json:"started_at"`
 	DurationMS int64             `json:"duration_ms"`
 	Gate       gate.Outcome      `json:"gate"`
@@ -41,7 +42,7 @@ type jsonSummary struct {
 // snippet (see scanner.finalize), so this file holds no secret values.
 func JSON(w io.Writer, d Data) error {
 	s := jsonSummary{
-		Version: d.Version, Repo: d.Repo, Commit: d.Commit, Baseline: d.Baseline,
+		Version: d.Version, Repo: d.Repo, Commit: d.Commit, Baseline: d.Baseline, DefectDojo: d.DefectDojo,
 		StartedAt: d.StartedAt.UTC(), DurationMS: d.Duration.Milliseconds(),
 		Gate: d.Gate, Stats: d.Stats, Findings: d.Findings,
 		Counts:   jsonCounts{Total: map[string]int{}, New: map[string]int{}},

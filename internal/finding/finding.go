@@ -88,8 +88,12 @@ type Finding struct {
 	FixedVersion     string `json:"fixed_version,omitempty"`
 
 	Fingerprint string `json:"fingerprint"`
-	// New is false when the fingerprint is in the baseline.
+	// New is false when the fingerprint is in the baseline or the finding
+	// was triaged in DefectDojo.
 	New bool `json:"new"`
+	// Triage is the DefectDojo decision (false_positive, risk_accepted,
+	// out_of_scope), or empty.
+	Triage string `json:"triage,omitempty"`
 }
 
 // ComputeFingerprint returns a hash that stays stable when code moves to a

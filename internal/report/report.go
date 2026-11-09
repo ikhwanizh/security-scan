@@ -26,7 +26,9 @@ type Data struct {
 	Commit    string
 	// Baseline is the baseline file used, or "" (then every finding is new).
 	Baseline string
-	Gate     gate.Outcome
+	// DefectDojo is the product whose triage was applied, or "".
+	DefectDojo string
+	Gate       gate.Outcome
 }
 
 // SeverityCount is one bucket of the severity summary, highest first.
@@ -57,6 +59,17 @@ func (d Data) NewCount() int {
 	n := 0
 	for _, f := range d.Findings {
 		if f.New {
+			n++
+		}
+	}
+	return n
+}
+
+// TriagedCount counts findings triaged in DefectDojo.
+func (d Data) TriagedCount() int {
+	n := 0
+	for _, f := range d.Findings {
+		if f.Triage != "" {
 			n++
 		}
 	}
