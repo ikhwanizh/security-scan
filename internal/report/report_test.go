@@ -156,3 +156,66 @@ func TestTerminalBaseline(t *testing.T) {
 		}
 	}
 }
+
+func TestDefectDojo(t *testing.T) {
+	var buf bytes.Buffer
+	if err := DefectDojo(&buf, withBaseline()); err != nil {
+		t.Fatal(err)
+	}
+	var got ddReport
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != "kscan" || len(got.Findings) != 3 {
+		t.Fatalf("unexpected report: %s", buf.String())
+	}
+	dep, sast, secret := got.Findings[0], got.Findings[1], got.Findings[2]
+	if dep.Severity != "Critical" || dep.ComponentName != "x/net" || dep.FixVersion != "v0.2.0" ||
+		len(dep.VulnerabilityIDs) != 1 || dep.VulnerabilityIDs[0] != "CVE-1" || dep.Title != "x/net v0.1.0: CVE-1" {
+		t.Errorf("dependency finding = %+v", dep)
+	}
+	if sast.Severity != "High" || sast.Line != 7 || sast.Title != "kscan-fstring-sql: SQL built with formatting" ||
+		sast.UniqueIDFromTool == "" || !strings.Contains(sast.Description, "alert(1)") {
+		t.Errorf("sast finding = %+v", sast)
+	}
+	if secret.Severity != "Info" || strings.Contains(secret.Description, "```") {
+		t.Errorf("secret finding must carry no snippet: %+v", secret)
+	}
+	// DefectDojo's fallback hash includes the description, so baseline state
+	// (new vs existing) must not change it.
+	var plain bytes.Buffer
+	if err := DefectDojo(&plain, sample()); err != nil {
+		t.Fatal(err)
+	}
+	if plain.String() != buf.String() {
+		t.Error("output must not depend on baseline state")
+	}
+}
+
+func TestDefectDojoAcceptedFields(t *testing.T) {
+	// Keys the DefectDojo 3.4 generic JSON parser accepts on a finding (plus
+	// the ones it pops before checking). Anything else fails the import.
+	allowed := map[string]bool{}
+	for _, k := range strings.Fields(`title severity description date file_path line component_name
+		component_version vulnerability_ids mitigation fix_available fix_version references
+		unique_id_from_tool vuln_id_from_tool static_finding dynamic_finding active verified tags`) {
+		allowed[k] = true
+	}
+	var buf bytes.Buffer
+	if err := DefectDojo(&buf, sample()); err != nil {
+		t.Fatal(err)
+	}
+	var raw struct {
+		Findings []map[string]any `json:"findings"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range raw.Findings {
+		for k := range f {
+			if !allowed[k] {
+				t.Errorf("field %q is not accepted by DefectDojo", k)
+			}
+		}
+	}
+}

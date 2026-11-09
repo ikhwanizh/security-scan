@@ -20,6 +20,8 @@ kscan has **no detection engine of its own**. It orchestrates proven open source
 
 Not covered: DAST (attacking a running app, as OWASP ZAP or Burp do) and business-logic bugs such as missing ownership checks (IDOR). Those still need manual review and tests.
 
+Flowcharts of the release, CI and scan pipeline: [docs/architecture.md](docs/architecture.md).
+
 ## Install
 
 ### Docker image (recommended, used by CI)
@@ -68,6 +70,7 @@ Outputs (`--format`, default `terminal,sarif,json,html`):
 | json | `kscan.json` | Machine-readable summary: gate result, counts, scanners, findings |
 | html | `kscan.html` | Self-contained page with severity filter and search |
 | markdown | `kscan.md` | Short summary for CI job pages (new findings only, no code) |
+| defectdojo | `kscan.defectdojo.json` | DefectDojo "Generic Findings Import" (see [DefectDojo](#defectdojo)) |
 
 ### Exit codes
 
@@ -117,6 +120,44 @@ kscan scan . --baseline .security-baseline.json
 - Secret findings are fingerprinted by line (the value is redacted), so a moved secret shows up as new. Rotate it either way.
 - A missing baseline file is not an error: every finding is new.
 
+## DefectDojo
+
+[DefectDojo](https://github.com/DefectDojo/django-DefectDojo) keeps finding history, triage (false positive, risk acceptance), SLAs and Jira sync. kscan stays the scanner and the CI gate; DefectDojo stores and manages the results.
+
+1. On the DefectDojo server, make it track kscan findings by kscan's fingerprint instead of its default hash, which includes the line number (so moved code would show up as new findings). Set this env var on the `uwsgi`, `celeryworker` and `celerybeat` containers:
+
+   ```
+   DD_DEDUPLICATION_ALGORITHM_PER_PARSER={"kscan Scan (Generic Findings Import)": "unique_id_from_tool"}
+   ```
+
+   The key is the test type name DefectDojo derives from kscan's report type; it must match exactly.
+
+2. Scan and reimport, from a **full scan of the default branch only**:
+
+   ```bash
+   kscan scan . --format terminal,defectdojo --out kscan-report
+   curl -fsS -X POST "$DD_URL/api/v2/reimport-scan/" \
+     -H "Authorization: Token $DD_API_KEY" \
+     -F scan_type="Generic Findings Import" \
+     -F file=@kscan-report/kscan.defectdojo.json \
+     -F product_type_name="Team" -F product_name="my-repo" \
+     -F engagement_name="CI/CD main" -F test_title="kscan" \
+     -F auto_create_context=true -F close_old_findings=true \
+     -F deduplication_on_engagement=true -F minimum_severity=Info
+   ```
+
+   Never upload a `--changed-since` scan: `close_old_findings` would close every finding outside the changed files.
+
+What reimport does with the fingerprint (verified against DefectDojo 3.4.202 on `test-fixtures/`):
+
+| Change between scans | DefectDojo result |
+|---|---|
+| Nothing | 0 created, all untouched |
+| Code moved to other lines | 0 created, untouched (the line number shown stays the first-seen one) |
+| Issue removed | that finding closed (mitigated) |
+
+The export holds the same data as `kscan.json`, so it includes source snippets of non-secret findings, but never secret values.
+
 ## CI setup (GitHub Actions)
 
 1. Copy [`ci/github/security-scan.yml`](ci/github/security-scan.yml) to `.github/workflows/security-scan.yml`.
@@ -129,6 +170,7 @@ What it does:
 - Pulls the pinned image; it never builds it.
 - Caches the trivy vulnerability DB per day.
 - Uploads SARIF to code scanning, writes the markdown summary to the job page, and keeps the reports as an artifact for 7 days.
+- **Optional DefectDojo upload**: when the secrets `DD_URL` and `DD_API_KEY` exist, full scans of the default branch are reimported into DefectDojo (product = repo name, product type = `DD_PRODUCT_TYPE` or the repo owner, engagement `CI/CD <branch>`, with commit, branch and run ID on the test). It is skipped for pull requests, other branches and scans where a scanner failed (exit 2), since `close_old_findings` would wrongly close findings. An upload failure shows on the step but does not change the gate. The API key's user needs permission to create products when they don't exist yet, and the DefectDojo server must be reachable from the runner.
 - Fails the job with kscan's exit code.
 
 Notes:

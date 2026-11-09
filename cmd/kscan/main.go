@@ -86,7 +86,7 @@ func scanCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringSliceVar(&fl.formats, "format", []string{"terminal", "sarif", "json", "html"}, "outputs: terminal, sarif, json, html, markdown")
+	f.StringSliceVar(&fl.formats, "format", []string{"terminal", "sarif", "json", "html"}, "outputs: terminal, sarif, json, html, markdown, defectdojo")
 	f.StringVar(&fl.out, "out", "kscan-report", "directory for sarif/html reports")
 	f.StringVar(&fl.configPath, "config", "", "config file (default <repo>/"+config.FileName+")")
 	f.StringVar(&fl.failOn, "fail-on", "", "exit 1 if a new finding is at or above this severity: none, info, low, medium, high, critical (default from config, else high)")
@@ -139,7 +139,7 @@ func runScan(ctx context.Context, repo string, fl scanFlags) error {
 		return fmt.Errorf("%s is not a directory", repo)
 	}
 	for _, f := range fl.formats {
-		if !slices.Contains([]string{"terminal", "sarif", "json", "html", "markdown"}, f) {
+		if !slices.Contains([]string{"terminal", "sarif", "json", "html", "markdown", "defectdojo"}, f) {
 			return fmt.Errorf("unknown format %q", f)
 		}
 	}
@@ -272,8 +272,9 @@ func writeReport(dir, format string, d report.Data) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	ext := map[string]string{"sarif": "sarif", "json": "json", "html": "html", "markdown": "md"}[format]
-	p := filepath.Join(dir, "kscan."+ext)
+	name := map[string]string{"sarif": "kscan.sarif", "json": "kscan.json", "html": "kscan.html",
+		"markdown": "kscan.md", "defectdojo": "kscan.defectdojo.json"}[format]
+	p := filepath.Join(dir, name)
 	// Reports can contain source snippets: keep them private to the user.
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -287,6 +288,8 @@ func writeReport(dir, format string, d report.Data) (string, error) {
 		err = report.JSON(f, d)
 	case "markdown":
 		err = report.Markdown(f, d)
+	case "defectdojo":
+		err = report.DefectDojo(f, d)
 	default:
 		err = report.HTML(f, d)
 	}

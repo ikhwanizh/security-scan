@@ -18,6 +18,13 @@
 # Security on private ones. Without it the upload step is skipped with a
 # warning and the job summary plus the report artifact remain.
 #
+# Optional DefectDojo upload: add repo or org secrets DD_URL (for example
+# https://defectdojo.example.com, reachable from the runner) and DD_API_KEY.
+# Only full scans of the default branch are uploaded, with reimport-scan and
+# close_old_findings. The DefectDojo server needs
+#   DD_DEDUPLICATION_ALGORITHM_PER_PARSER={"kscan Scan (Generic Findings Import)": "unique_id_from_tool"}
+# so findings are tracked by kscan fingerprint (see kscan README).
+#
 # Actions are pinned to commit SHAs; the comment shows the version.
 
 name: security-scan
@@ -41,11 +48,15 @@ env:
   KSCAN_IMAGE: ghcr.io/ikhwanizh/kscan:1.0.0
   # Set to "false" to run full scans on pull requests too.
   KSCAN_PR_DIFF: "true"
+  # DefectDojo product type; empty means the repo owner.
+  DD_PRODUCT_TYPE: ""
 
 jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DD_URL: ${{ secrets.DD_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -74,9 +85,18 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           mkdir -p "$RUNNER_TEMP/trivy-cache" kscan-report
-          args=(scan /src --out /src/kscan-report --format terminal,sarif,json,markdown
+          formats=terminal,sarif,json,markdown
+          dd=false
+          if [ -n "$DD_URL" ] && [ "$EVENT" != "pull_request" ] && [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+            dd=true
+            formats+=,defectdojo
+          fi
+          echo "dd=$dd" >> "$GITHUB_OUTPUT"
+          args=(scan /src --out /src/kscan-report --format "$formats"
                 --baseline /src/.security-baseline.json)
           if [ "$EVENT" = "pull_request" ] && [ "$KSCAN_PR_DIFF" = "true" ]; then
             args+=(--changed-since "origin/$BASE_REF")
@@ -98,6 +118,38 @@ jobs:
         with:
           sarif_file: kscan-report/kscan.sarif
           category: kscan
+
+      # Full scans of the default branch only, and only when every scanner
+      # ran (exit 0 or 1): close_old_findings would otherwise close findings
+      # outside a diff scan, or every finding of a scanner that failed.
+      - name: Upload to DefectDojo
+        if: always() && steps.scan.outputs.dd == 'true' && (steps.scan.outputs.code == '0' || steps.scan.outputs.code == '1')
+        continue-on-error: true
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          PRODUCT_TYPE: ${{ env.DD_PRODUCT_TYPE || github.repository_owner }}
+          PRODUCT: ${{ github.event.repository.name }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          status=$(curl -sS --retry 3 -o "$RUNNER_TEMP/defectdojo.json" -w '%{http_code}' \
+            -X POST "${DD_URL%/}/api/v2/reimport-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F scan_type="Generic Findings Import" \
+            -F file=@kscan-report/kscan.defectdojo.json \
+            -F product_type_name="$PRODUCT_TYPE" -F product_name="$PRODUCT" \
+            -F engagement_name="CI/CD $BRANCH" -F test_title=kscan \
+            -F auto_create_context=true -F close_old_findings=true \
+            -F deduplication_on_engagement=true -F minimum_severity=Info \
+            -F commit_hash="$SHA" -F branch_tag="$BRANCH" -F build_id="$RUN_ID" \
+            -F source_code_management_uri="$REPO_URL")
+          echo "DefectDojo reimport: HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            head -c 2000 "$RUNNER_TEMP/defectdojo.json"; echo
+            exit 1
+          fi
 
       - name: Job summary
         if: always() && hashFiles('kscan-report/kscan.md') != ''
